@@ -1,0 +1,29 @@
+minisedric/
+│
+├── app/
+│   ├── docker/
+│   │   └── Dockerfile           # Dockerfile for your application (Lambda function)
+│   │
+│   ├── lambda_function.py       # Lambda function code
+│   ├── requirements.txt         # Python dependencies for Lambda function
+│   ├── tests/
+│       ├── test_lambda_function.py  # Unit tests for Lambda function
+│       └── test_integration.py      # Integration tests for API endpoints
+│
+├── localstack/
+│   ├── docker/
+│       └── Dockerfile           # Dockerfile for LocalStack
+│
+├── .envs/
+│   └── .dev/
+│       └── .localstack          # Environment variables for LocalStack
+│
+├── cdk/
+│   ├── docker/
+│   │   └── Dockerfile           # Dockerfile for AWS CDK scripts
+│   │
+│   ├── main.py                  # AWS CDK infrastructure code
+│   ├── requirements.txt         # Python dependencies for AWS CDK scripts
+│
+├── .gitignore                   # Git ignore file
+└── README.md                    # Project documentation

@@ -1,0 +1,39 @@
+services:
+  localstack:
+    container_name: aws-simulation-localstack
+    build:
+      context: ./localstack
+      dockerfile: ./docker/Dockerfile
+    ports:
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    env_file:
+      - ./.envs/.dev/.localstack
+
+  cdk:
+    container_name: minisedric-cdk
+    build:
+      context: ./cdk
+      dockerfile: ./docker/Dockerfile
+    volumes:
+      - ./cdk/cdk:/cdk:z
+    env_file:
+      - ./.envs/.dev/.aws
+    depends_on:
+      - localstack
+      - app
+
+  app:
+    container_name: minisedric-app
+    build:
+      context: ./app
+      dockerfile: ./docker/Dockerfile
+    volumes:
+      - ./app/app:/app:z
+    env_file:
+      - ./.envs/.dev/.aws
+    depends_on:
+      - localstack
