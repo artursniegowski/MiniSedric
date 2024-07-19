@@ -1,3 +1,3 @@
 # localstack env variables
 DEBUG=1
-SERVICES=s3,transcribe,apigateway,lambda,iam
+SERVICES="acm,apigateway,cloudformation,cloudwatch,config,dynamodb,dynamodbstreams,ec2,es,events,firehose,iam,kinesis,kms,lambda,logs,opensearch,redshift,resource-groups,resourcegroupstaggingapi,route53,route53resolver,s3,s3control,scheduler,secretsmanager,ses,sns,sqs,ssm,stepfunctions,sts,support,swf,transcribe"

@@ -1,9 +1,7 @@
 services:
   localstack:
-    container_name: aws-simulation-localstack
-    build:
-      context: ./localstack
-      dockerfile: ./docker/Dockerfile
+    container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
+    image: localstack/localstack
     ports:
       - "127.0.0.1:4566:4566"
       - "127.0.0.1:4510-4559:4510-4559"
@@ -12,28 +10,36 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
     env_file:
       - ./.envs/.dev/.localstack
+    networks:
+      ls:
+        ipv4_address: 10.0.2.20
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   cdk:
     container_name: minisedric-cdk
     build:
       context: ./cdk
       dockerfile: ./docker/Dockerfile
+    image: cdk
     volumes:
       - ./cdk/cdk:/cdk:z
+      - ./cdk/lambda:/lambda:z
     env_file:
       - ./.envs/.dev/.aws
+    dns:
+      - 10.0.2.20
+    networks:
+      - ls
     depends_on:
-      - localstack
-      - app
+      localstack:
+        condition: service_healthy
 
-  app:
-    container_name: minisedric-app
-    build:
-      context: ./app
-      dockerfile: ./docker/Dockerfile
-    volumes:
-      - ./app/app:/app:z
-    env_file:
-      - ./.envs/.dev/.aws
-    depends_on:
-      - localstack
+networks:
+  ls:
+    ipam:
+      config:
+        - subnet: 10.0.2.0/24

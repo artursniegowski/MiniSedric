@@ -1,5 +1,6 @@
 # aws env variables
-AWS_ACCESS_KEY_ID="your-access-key-id"
-AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-AWS_DEFAULT_REGION="us-east-1"
-AWS_ENDPOINT_URL="http://localhost:4566"
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+AWS_DEFAULT_REGION=us-east-1
+AWS_ENDPOINT_URL=http://localhost.localstack.cloud:4566
+AWS_S3_BUCKETNAME_MINISEDRIC=mini-sedric-bucket-data-s3-all-mp3-media-0001

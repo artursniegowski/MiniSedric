@@ -1,4 +1,8 @@
 #!/bin/bash
 
-cdk bootstrap
-cdk deploy --require-approval never
+set -e
+set -o pipefail
+set -u
+
+cdklocal bootstrap -v --output ./cdk.local.out
+cdklocal deploy -v --require-approval never --output ./cdk.local.out

@@ -6,6 +6,8 @@ from aws_cdk import (
     Stack,
 )
 from constructs import Construct
+import os
+
 
 class CdkStack(Stack):
 
@@ -16,6 +18,7 @@ class CdkStack(Stack):
         bucket = s3.Bucket(
             self, 
             "MiniSedricBucket",
+            bucket_name=os.getenv('AWS_S3_BUCKETNAME_MINISEDRIC')
         )
 
         lambda_role = iam.Role(
@@ -34,10 +37,7 @@ class CdkStack(Stack):
             "MiniSedricLambda",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
-            code=_lambda.DockerImageCode.from_image_asset(
-                directory='./app',
-                file='./docker/Dockerfile',
-            ),
+            code=_lambda.Code.from_asset("../../lambda"),
             role=lambda_role,
             environment={
                 'BUCKET_NAME': bucket.bucket_name

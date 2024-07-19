@@ -14,6 +14,7 @@ __pycache__/
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+cdk.local.out
 
 # Distribution / packaging
 .Python
@@ -68,3 +69,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# lambda / lambda instalation files
+cdk/lambda/*
+!cdk/lambda/requirements.txt
+!cdk/lambda/lambda_function.py
