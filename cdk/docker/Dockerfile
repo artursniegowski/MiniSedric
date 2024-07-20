@@ -24,14 +24,12 @@ COPY ./scripts/setup-aws-cred.sh /setup-aws-cred.sh
 COPY ./scripts/package-lambda.sh /package-lambda.sh
 COPY ./scripts/copy-media-2-s3.sh /copy-media-2-s3.sh
 COPY ./scripts/startup.sh /startup.sh
-RUN chmod +x /setup.sh /setup-aws-cred.sh /package-lambda.sh /copy-media-2-s3.sh /startup.sh
+COPY ./scripts/cdk-deploy.sh /cdk-deploy.sh
+RUN chmod +x /setup.sh /setup-aws-cred.sh /package-lambda.sh /copy-media-2-s3.sh /startup.sh /cdk-deploy.sh
 
 ENTRYPOINT ["/setup.sh"]
 
 WORKDIR /cdk
-
-COPY ./scripts/cdk-deploy.sh /cdk-deploy.sh
-RUN chmod +x /cdk-deploy.sh
 
 # for mp3 files
 COPY ./media /temp/media/

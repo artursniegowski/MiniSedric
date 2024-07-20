@@ -1,0 +1,21 @@
+[tool.black]
+line-length = 88
+target-version = ['py312']
+exclude = '''
+/(
+    scripts|
+    requirements|
+    docker|
+    ENV| 
+    venv| 
+    cdk\.local|
+    cdk\.out
+)/
+'''
+
+[tool.isort]
+profile = "black"
+
+[tool.flake8]
+ignore = "E203, E501, W503"
+max-line-length = 120

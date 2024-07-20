@@ -1,5 +1,6 @@
 lambda/*
 # Include specific files in the lambda directory
+!lambda/extras
 !lambda/lambda_function.py
 !lambda/requirements.txt
 

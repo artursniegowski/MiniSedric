@@ -74,3 +74,4 @@ venv.bak/
 cdk/lambda/*
 !cdk/lambda/requirements.txt
 !cdk/lambda/lambda_function.py
+!cdk/lambda/extras
