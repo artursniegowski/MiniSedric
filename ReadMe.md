@@ -50,7 +50,7 @@ These tools are integrated into the project and can be easily run using make com
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/minisedric.git
+git clone https://github.com/artursniegowski/MiniSedric
 cd minisedric
 ```
 
