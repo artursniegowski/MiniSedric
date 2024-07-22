@@ -1,10 +1,8 @@
 import re
 from typing import Any, Dict, Tuple
 
-import boto3
 from botocore.exceptions import ClientError
-
-s3 = boto3.client("s3")
+from extras.types import S3ClientType
 
 
 def validate_input(body: Dict[str, Any], required_fields: Tuple[str]) -> Dict[str, Any]:
@@ -135,11 +133,18 @@ def sanitize_trackers(trackers: Any) -> Dict[str, Any]:
     if not all(isinstance(tracker, str) for tracker in trackers):
         return {"error": "All trackers must be strings"}
 
+    non_empty_trackers = [tracker for tracker in trackers if tracker.strip()]
+    if len(non_empty_trackers) != len(trackers):
+        return {"error": "Trackers cannot be empty strings"}
+
     return {"trackers": trackers}
 
 
 def check_s3_object_exists(
-    bucket_name: str, key: str, with_content_type_check: bool = True
+    bucket_name: str,
+    key: str,
+    s3_client: S3ClientType,
+    with_content_type_check: bool = True,
 ) -> Dict[str, Any]:
     """
     Check if the S3 object exists and is of the correct type.
@@ -149,11 +154,12 @@ def check_s3_object_exists(
         key (str): The key of the S3 object.
         with_content_type_check (bool): Weather to use content type check
                                         to validate the object
+        s3_client (S3ClientType): boto client to interact with s3 bucket
     Returns:
         Dict[str, Any]: A dictionary with status or error message.
     """
     try:
-        response = s3.head_object(Bucket=bucket_name, Key=key)
+        response = s3_client.head_object(Bucket=bucket_name, Key=key)
         content_type = response["ContentType"]
         if with_content_type_check and content_type not in {"audio/mpeg", "audio/mp3"}:
             return {"error": "The file is not an mp3 or the content type is incorrect"}

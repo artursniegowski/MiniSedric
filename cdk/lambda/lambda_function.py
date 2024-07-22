@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Any, Dict
 
+import boto3
 from extras.extractors import (NATURAL_LANGUAGE_PROCESSING_PIPELINE,
                                SimpleRegexInsightExtractor,
                                SpacyNLPInsightExtractor)
@@ -12,6 +13,9 @@ from extras.validators import (check_s3_object_exists, sanitize_s3_uri,
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+s3 = boto3.client("s3")
+transcribe = boto3.client("transcribe")
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
@@ -75,7 +79,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
 
     bucket_name, key = sanitized_s3_uri["bucket_name"], sanitized_s3_uri["key"]
 
-    s3_object_exists = check_s3_object_exists(bucket_name=bucket_name, key=key)
+    s3_object_exists = check_s3_object_exists(
+        bucket_name=bucket_name, key=key, s3_client=s3
+    )
     if "error" in s3_object_exists:
         msg = f"S3 object does NOT exists: {s3_object_exists["error"]}"
         logger.error(msg)
@@ -91,6 +97,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
         bucket_name,
         key,
         trackers,
+        s3_client=s3,
+        transcribe_client=transcribe,
         extractor=extractor,
         # extractor=SimpleRegexInsightExtractor(),
         # extractor=SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE),
