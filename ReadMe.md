@@ -51,7 +51,7 @@ These tools are integrated into the project and can be easily run using make com
 
 ```bash
 git clone https://github.com/artursniegowski/MiniSedric
-cd minisedric
+cd MiniSedric
 ```
 
 #### 2. Configure Environment Variables
