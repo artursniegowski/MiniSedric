@@ -36,12 +36,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
             - statusCode (int): The HTTP status code.
             - body (str): The response body as a JSON string. Contains error messages
               or transcription insights.
-    
+
     Headers:
         - The `X-Spacy` header can be used to specify whether to use Spacy for tracker extraction.
     """
-    spacy_enabled = event['headers'].get('X-Spacy', None) == 'True'
-    
+    spacy_enabled = event["headers"].get("X-Spacy", None) == "True"
+
     try:
         body = json.loads(event["body"])
     except json.JSONDecodeError as e:
@@ -81,7 +81,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
         logger.error(msg)
         return ResponseAWS(400, {"error": s3_object_exists["error"]}).create_response()
 
-    # TODO: Seperate extractor from transcribe job ??
     return handle_transcription_job(
         interaction_url,
         bucket_name,
