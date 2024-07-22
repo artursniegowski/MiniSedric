@@ -81,7 +81,9 @@ def handle_transcription_job(
             transcript_text = transcript_result["transcript_text"]
 
             insights = extractor.extract_insights(transcript_text, trackers)
-            return ResponseAWS(200, {"insights": insights}).create_response()
+            return ResponseAWS(
+                200, {"status": "COMPLETED", "insights": insights}
+            ).create_response()
 
         elif job_status == "FAILED":
             msg = "Transcription job failed"

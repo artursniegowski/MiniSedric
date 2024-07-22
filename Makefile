@@ -33,9 +33,10 @@ deploy-cdk:
 
 ### docker commands - END ###
 
+### linting / test coverege / formating commands - START ###
+
 FILES = ../lambda/lambda_function.py ../lambda/extras app.py cdk/cdk_stack.py tests
 
-### linting / test coverege / formating commands - START ###
 flake8:
 	docker-compose run --rm cdk sh -c "flake8 $(FILES)"
 
