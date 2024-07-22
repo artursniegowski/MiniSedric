@@ -1,8 +1,12 @@
 #!/bin/bash
 
 
-/package-lambda.sh
+# package-lambda.sh
 
-/cdk-deploy.sh
+package-spacy-lambda.sh
 
-/copy-media-2-s3.sh
+cdk-deploy.sh
+
+copy-media-2-s3.sh
+
+package-lambda-cleanup.sh

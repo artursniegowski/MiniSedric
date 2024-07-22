@@ -1,8 +1,8 @@
 lambda/*
-# Include specific files in the lambda directory
+# Include specific files in the lambda directory for lambda packaging
 !lambda/extras
 !lambda/lambda_function.py
-!lambda/requirements.txt
+!lambda/requirements
 
 # cdk out
 cdk/cdk.local.out/*

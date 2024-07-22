@@ -18,20 +18,17 @@ RUN apt-get update && \
 
 COPY ./cdk /cdk
 COPY ./lambda /lambda
+COPY ./scripts /scripts
 
-COPY ./scripts/setup.sh /setup.sh
-COPY ./scripts/setup-aws-cred.sh /setup-aws-cred.sh
-COPY ./scripts/package-lambda.sh /package-lambda.sh
-COPY ./scripts/copy-media-2-s3.sh /copy-media-2-s3.sh
-COPY ./scripts/startup.sh /startup.sh
-COPY ./scripts/cdk-deploy.sh /cdk-deploy.sh
-RUN chmod +x /setup.sh /setup-aws-cred.sh /package-lambda.sh /copy-media-2-s3.sh /startup.sh /cdk-deploy.sh
+RUN chmod -R +x /scripts
 
-ENTRYPOINT ["/setup.sh"]
+ENV PATH="/scripts:$PATH"
+
+ENTRYPOINT ["setup.sh"]
 
 WORKDIR /cdk
 
 # for mp3 files
 COPY ./media /temp/media/
 
-CMD ["/startup.sh"]
+CMD ["startup.sh"]

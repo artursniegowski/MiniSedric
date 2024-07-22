@@ -1,19 +1,20 @@
 import json
 import logging
-import re
 from typing import Any, Dict
 
-import boto3
-from botocore.exceptions import ClientError
+from extras.extractors import (NATURAL_LANGUAGE_PROCESSING_PIPELINE,
+                               SimpleRegexInsightExtractor,
+                               SpacyNLPInsightExtractor)
+from extras.handlers import handle_transcription_job
+from extras.response import ResponseAWS
+from extras.validators import (check_s3_object_exists, sanitize_s3_uri,
+                               sanitize_trackers, validate_input)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
-transcribe = boto3.client("transcribe")
 
-
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
     """
     AWS Lambda function handler to process audio file transcription requests.
 
@@ -42,142 +43,52 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         msg = f"Invalid JSON format: {str(e)}"
         logger.error(msg)
-        return {"statusCode": 400, "body": json.dumps({"error": msg})}
+        return ResponseAWS(400, {"error": msg}).create_response()
 
     required_parameters = ("interaction_url", "trackers")
+    spacy_enabled = body.get("spacy")
 
-
-
-    interaction_url = body.get("interaction_url")
-    trackers = body.get("trackers")
-
-    if not interaction_url or not trackers:
-        msg = f"Invalid JSON format, Not missing: \
-            'interaction_url':{bool(interaction_url)}, 'trackers':{bool(trackers)}"
+    validation_result = validate_input(body, required_parameters)
+    if "error" in validation_result:
+        msg = f"Invalid JSON format: {validation_result["error"]}"
         logger.error(msg)
-        return {"statusCode": 400, "body": json.dumps({"error": msg})}
+        return ResponseAWS(400, {"error": validation_result["error"]}).create_response()
 
-    logger.info("Extracting bucket name and key")
+    interaction_url = validation_result["interaction_url"]
+    trackers = validation_result["trackers"]
 
-    # "s3://mini-sedric-bucket-data-s3-all-mp3-media-0001/sample.mp3"
-    # "s3.us-east-1.localhost.localstack.cloud:4566/mini-sedric-bucket-data-s3-all-mp3-media-0001/sample.mp3"
-    parts = interaction_url.split("/")
-    bucket_name = parts[-2]
-    key = parts[-1]
-    if (
-        not interaction_url.startswith("s3://")
-        or not interaction_url.endswith(".mp3")
-        or not bucket_name
-        or not key
-    ):
-        msg = "Invalid S3 URL format, expected:'s3://<bucket_name>/<file_name>.mp3'"
+    sanitized_tackers = sanitize_trackers(trackers)
+    if "error" in sanitized_tackers:
+        msg = f"Invalid trackers format: {sanitized_tackers["error"]}"
         logger.error(msg)
-        return {
-            "statusCode": 400,
-            "body": json.dumps(
-                {"error": msg, "expected": "s3://<bucket_name>/<file_name>.mp3"}
-            ),
-        }
+        return ResponseAWS(400, {"error": sanitized_tackers["error"]}).create_response()
+    trackers = sanitized_tackers["trackers"]
 
-    logger.info("Validating Data")
+    sanitized_s3_uri = sanitize_s3_uri(interaction_url)
+    if "error" in sanitized_s3_uri:
+        msg = f"Invalid S3 URI format: {sanitized_s3_uri["error"]}"
+        logger.error(msg)
+        return ResponseAWS(400, {"error": sanitized_s3_uri["error"]}).create_response()
 
-    try:
-        response = s3.head_object(Bucket=bucket_name, Key=key)
-        content_type = response["ContentType"]
-        if content_type not in set({"audio/mpeg", "audio/mp3"}):
-            msg = "The file is not an mp3, The content types does not match 'audio/mpeg',\
-                'audio/mp3'. Was the file uploaded with a correct Content Type?"
-            logger.error(response)
-            logger.error(content_type)
-            logger.error(msg)
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": msg, "requested_file": interaction_url}),
-            }
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "404":
-            msg = f"The specified object does not exist {key}"
-            logger.error(msg)
-            logger.error(e.response["Error"]["Code"])
-            return {
-                "statusCode": 404,
-                "body": json.dumps({"error": msg, "requested_url": interaction_url}),
-            }
-        else:
-            raise e
+    bucket_name, key = sanitized_s3_uri["bucket_name"], sanitized_s3_uri["key"]
 
-    job_name = (
-        f"transcriptionJob-{bucket_name.replace('/', '-')}-{key.replace('/', '-')}"
+    s3_object_exists = check_s3_object_exists(bucket_name=bucket_name, key=key)
+    if "error" in s3_object_exists:
+        msg = f"S3 object does NOT exists: {s3_object_exists["error"]}"
+        logger.error(msg)
+        return ResponseAWS(400, {"error": s3_object_exists["error"]}).create_response()
+
+    # TODO: Seperate extractor from transcribe job ??
+    return handle_transcription_job(
+        interaction_url,
+        bucket_name,
+        key,
+        trackers,
+        extractor=(
+            SimpleRegexInsightExtractor()
+            if not spacy_enabled
+            else SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE)
+        ),
+        # extractor=SimpleRegexInsightExtractor(),
+        # extractor=SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE),
     )
-    try:
-        status = transcribe.get_transcription_job(TranscriptionJobName=job_name)
-        job_status = status["TranscriptionJob"]["TranscriptionJobStatus"]
-        if job_status == "COMPLETED":
-            logger.info("Transcription job completed")
-            # transcript_uri = status["TranscriptionJob"]["Transcript"][
-            #     "TranscriptFileUri"
-            # ]
-            try:
-                logger.info("Transcription COMPLETED")
-                transcript_key = job_name + ".json"
-                response = s3.get_object(Bucket=bucket_name, Key=transcript_key)
-                transcript_data = response["Body"].read().decode("utf-8")
-                transcript_json = json.loads(transcript_data)
-                logger.info("Extracting insignts COMPLETED")
-
-                transcript_text = transcript_json["results"]["transcripts"][0][
-                    "transcript"
-                ]
-                insights = []
-                sentences = transcript_text.split(".")
-                for i, sentence in enumerate(sentences):
-                    for tracker in trackers:
-                        # only first occurance
-                        matched = re.search(rf"\b{tracker}\b", sentence)
-                        if matched:
-                            insights.append(
-                                {
-                                    "sentence_index": i,
-                                    "start_word_index": len(
-                                        sentence[: matched.start()].split()
-                                    ),
-                                    "end_word_index": len(
-                                        sentence[: matched.end()].split()
-                                    ),
-                                    "tracker_value": tracker,
-                                    "transcribe_value": sentence.strip(),
-                                }
-                            )
-
-                return {"statusCode": 200, "body": json.dumps({"insights": insights})}
-            except s3.exceptions.NoSuchKey:
-                logger.error(
-                    f"The specified key does not exist in the bucket: {transcript_key}"
-                )
-                return {
-                    "statusCode": 404,
-                    "body": json.dumps({"error": "Transcription result not found"}),
-                }
-
-        elif job_status == "FAILED":
-            msg = "Transcription job failed"
-            logger.error(msg)
-            return {"statusCode": 400, "body": json.dumps({"status": job_status})}
-        else:
-            msg = "Job still pending"
-            logger.info(msg)
-            return {"statusCode": 202, "body": json.dumps({"status": job_status})}
-    except transcribe.exceptions.NotFoundException:
-        logger.info(f"Starting new transcription job: {job_name}")
-        transcribe.start_transcription_job(
-            TranscriptionJobName=job_name,
-            Media={"MediaFileUri": interaction_url},
-            MediaFormat="mp3",
-            LanguageCode="en-US",
-        )
-        return {
-            "statusCode": 202,
-            "body": json.dumps(
-                {"message": "Transcription job started", "job_name": job_name}
-            ),
-        }

@@ -70,8 +70,8 @@ ENV/
 env.bak/
 venv.bak/
 
-# lambda / lambda instalation files
+# lambda / lambda instalation files / for lambda packaging
 cdk/lambda/*
-!cdk/lambda/requirements.txt
+!cdk/lambda/requirements
 !cdk/lambda/lambda_function.py
 !cdk/lambda/extras
