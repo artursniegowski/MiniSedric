@@ -81,16 +81,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
         logger.error(msg)
         return ResponseAWS(400, {"error": s3_object_exists["error"]}).create_response()
 
+    extractor = (
+        SimpleRegexInsightExtractor()
+        if not spacy_enabled
+        else SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE)
+    )
     return handle_transcription_job(
         interaction_url,
         bucket_name,
         key,
         trackers,
-        extractor=(
-            SimpleRegexInsightExtractor()
-            if not spacy_enabled
-            else SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE)
-        ),
+        extractor=extractor,
         # extractor=SimpleRegexInsightExtractor(),
         # extractor=SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE),
     )
