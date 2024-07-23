@@ -57,7 +57,17 @@ class CdkStack(Stack):
             code=_lambda.Code.from_asset("../../lambda"),
             role=lambda_role,
             environment={"BUCKET_NAME": bucket.bucket_name},
+            reserved_concurrent_executions=5,
         )
+
+        # Add this line for lambda provisioned concurrency
+        # lambda_alias = _lambda.Alias(
+        #     self,
+        #     "LambdaAlias",
+        #     alias_name="live",
+        #     version=lambda_function.current_version,
+        #     provisioned_concurrent_executions=1
+        # )
 
         api = apigateway.RestApi(
             self,
@@ -67,6 +77,8 @@ class CdkStack(Stack):
             endpoint_configuration={"types": [apigateway.EndpointType.REGIONAL]},
         )
 
+        # Add this line for lambda provisioned concurrency
+        # lambda_integration = apigateway.LambdaIntegration(lambda_alias)
         lambda_integration = apigateway.LambdaIntegration(lambda_function)
 
         interactions = api.root.add_resource("interactions")
