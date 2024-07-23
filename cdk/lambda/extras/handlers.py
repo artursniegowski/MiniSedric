@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Any, Dict
 
+from extras.exception import BaseError, S3ClientError
 from extras.extractors import InsightExtractor
 from extras.response import ResponseAWS
 from extras.types import S3ClientType, TranscribeClientType
@@ -16,7 +17,7 @@ def handle_transcript_text_from_s3_job(
     s3_client: S3ClientType,
 ) -> Dict[str, Any]:
     """
-    Retrieve the transcript text from an S3 object and handle any errors.
+    Retrieve the transcript text from an S3 object.
 
     Args:
         bucket_name (str): The name of the S3 bucket.
@@ -33,9 +34,23 @@ def handle_transcript_text_from_s3_job(
         transcript_text = transcript_json["results"]["transcripts"][0]["transcript"]
         return {"transcript_text": transcript_text}
     except s3_client.exceptions.NoSuchKey:
-        return {"error": "The specified key does not exist in the bucket"}
+        raise S3ClientError(
+            {
+                "error": {
+                    "error_message": "The specified key does not exist in the bucket",
+                    "error": f"Error retrieving {bucket_name} {transcript_key}",
+                }
+            }
+        )
     except KeyError:
-        return {"error": "Key is missing in the response or data dictionary."}
+        raise BaseError(
+            {
+                "error": {
+                    "error_message": "Missing key in the response or data dictionary",
+                    "error": f"Error retrieving {bucket_name} {transcript_key}",
+                }
+            }
+        )
 
 
 def handle_transcription_job(
@@ -73,14 +88,6 @@ def handle_transcription_job(
             transcript_result = handle_transcript_text_from_s3_job(
                 bucket_name, transcript_key, s3_client=s3_client
             )
-            if "error" in transcript_result:
-                msg = (
-                    f"Error retrieving transcript from S3: {transcript_result['error']}"
-                )
-                logger.error(msg)
-                return ResponseAWS(
-                    400, {"error": transcript_result["error"]}
-                ).create_response()
 
             transcript_text = transcript_result["transcript_text"]
 

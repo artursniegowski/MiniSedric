@@ -2,6 +2,7 @@ import re
 from typing import Any, Dict, Tuple
 
 from botocore.exceptions import ClientError
+from extras.exception import S3ClientError, ValidationError
 from extras.types import S3ClientType
 
 
@@ -19,7 +20,7 @@ def validate_input(body: Dict[str, Any], required_fields: Tuple[str]) -> Dict[st
                         - If validation is successful, the dictionary will contain the validated data.
     """
     if not required_fields:
-        return {"error": "No 'required_fields' provided"}
+        raise ValidationError({"error": "required_fields is empty"})
     else:
         required_fields = tuple(set(required_fields))
 
@@ -31,7 +32,9 @@ def validate_input(body: Dict[str, Any], required_fields: Tuple[str]) -> Dict[st
             errors[field] = "Missing or empty field"
 
     if errors:
-        return {"error": errors}
+        raise ValidationError(
+            {"error": {"error": errors, "error_message": "Invalid JSON format"}}
+        )
 
     return data
 
@@ -75,7 +78,7 @@ def _is_valid_bucket_name(bucket_name: str) -> bool:
     return True
 
 
-def sanitize_s3_uri(interaction_url: str) -> Dict[str, Any]:
+def sanitize_s3_uri(interaction_url: str) -> tuple[str, str]:
     """
     Sanitize and validate the S3 URI by extracting the bucket name and key.
 
@@ -87,7 +90,7 @@ def sanitize_s3_uri(interaction_url: str) -> Dict[str, Any]:
         interaction_url (str): The S3 URI to be sanitized and validated.
 
     Returns:
-        Dict[str, Any]: A dictionary with either an error message or the extracted bucket name and key.
+        tuple[str, str]: A tuple with  extracted bucket name and key.
             - If the URI is invalid, the dictionary will contain an 'error' key with details.
             - If the URI is valid, the dictionary will contain 'bucket_name' and 'key'.
     """
@@ -100,24 +103,28 @@ def sanitize_s3_uri(interaction_url: str) -> Dict[str, Any]:
         bucket_name = match.group("bucket_name")
         key = match.group("key")
         if _is_valid_bucket_name(bucket_name=bucket_name):
-            return {"bucket_name": bucket_name, "key": key}
+            return bucket_name, key
         else:
-            return {
+            raise ValidationError(
+                {
+                    "error": {
+                        "error": f"Invalid S3 bucket name {bucket_name} - refer to AWS bucket name rules.",
+                        "expected": EXPECTED_S3_URI,
+                    }
+                }
+            )
+    else:
+        raise ValidationError(
+            {
                 "error": {
-                    "error_info": "Invalid S3 bucket name - refer to AWS bucket name rules.",
+                    "error": f"Invalid S3 URI format {interaction_url}",
                     "expected": EXPECTED_S3_URI,
                 }
             }
-    else:
-        return {
-            "error": {
-                "error_info": "Invalid S3 URI format.",
-                "expected": EXPECTED_S3_URI,
-            }
-        }
+        )
 
 
-def sanitize_trackers(trackers: Any) -> Dict[str, Any]:
+def sanitize_trackers(trackers: Any) -> list[str]:
     """
     Validate the trackers input to ensure it is a list of strings.
 
@@ -125,19 +132,40 @@ def sanitize_trackers(trackers: Any) -> Dict[str, Any]:
         trackers (Any): The input to validate.
 
     Returns:
-        Dict[str, Any]: A dictionary with either the validated trackers or an error message.
+       list[str]: A list with the validated trackers .
     """
     if not isinstance(trackers, list):
-        return {"error": "Trackers must be a list"}
+        raise ValidationError(
+            {
+                "error": {
+                    "error": "Trackers must be a list",
+                    "error_message": "Invalid trackers format",
+                }
+            }
+        )
 
     if not all(isinstance(tracker, str) for tracker in trackers):
-        return {"error": "All trackers must be strings"}
+        raise ValidationError(
+            {
+                "error": {
+                    "error": "All trackers must be strings",
+                    "error_message": "Invalid trackers format",
+                }
+            }
+        )
 
     non_empty_trackers = [tracker for tracker in trackers if tracker.strip()]
     if len(non_empty_trackers) != len(trackers):
-        return {"error": "Trackers cannot be empty strings"}
+        raise ValidationError(
+            {
+                "error": {
+                    "error": "Trackers cannot be empty strings",
+                    "error_message": "Invalid trackers format",
+                }
+            }
+        )
 
-    return {"trackers": trackers}
+    return trackers
 
 
 def check_s3_object_exists(
@@ -162,16 +190,24 @@ def check_s3_object_exists(
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
         content_type = response["ContentType"]
         if with_content_type_check and content_type not in {"audio/mpeg", "audio/mp3"}:
-            return {"error": "The file is not an mp3 or the content type is incorrect"}
+            raise ValidationError(
+                {
+                    "error": f"The file {bucket_name} {key} is not an mp3 or the content type is incorrect"
+                }
+            )
     except ClientError as e:
         if e.response["Error"]["Code"] == "404":
-            return {"error": f"The specified object does not exist: {key}"}
+            raise S3ClientError(
+                {"error": f"The specified object does not exist: {key}"}
+            )
         else:
-            return {
-                "error": {
-                    "error_info": f"Cant retrive the object: {key}",
-                    "error": str(e),
+            raise S3ClientError(
+                {
+                    "error": {
+                        "error": str(e),
+                        "error_message": f"Cant retrive the object: {key}",
+                    }
                 }
-            }
+            )
 
     return {"exist": True}

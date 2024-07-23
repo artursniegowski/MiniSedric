@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict
 
 import boto3
+from extras.exception import BaseError, S3ClientError, ValidationError
 from extras.extractors import (NATURAL_LANGUAGE_PROCESSING_PIPELINE,
                                SimpleRegexInsightExtractor,
                                SpacyNLPInsightExtractor)
@@ -53,53 +54,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
         logger.error(msg)
         return ResponseAWS(400, {"error": msg}).create_response()
 
-    required_parameters = ("interaction_url", "trackers")
+    try:
+        required_parameters = ("interaction_url", "trackers")
+        validation_result = validate_input(body, required_parameters)
 
-    validation_result = validate_input(body, required_parameters)
-    if "error" in validation_result:
-        msg = f"Invalid JSON format: {validation_result["error"]}"
-        logger.error(msg)
-        return ResponseAWS(400, {"error": validation_result["error"]}).create_response()
+        interaction_url, trackers = (
+            validation_result["interaction_url"],
+            validation_result["trackers"],
+        )
 
-    interaction_url = validation_result["interaction_url"]
-    trackers = validation_result["trackers"]
+        trackers = sanitize_trackers(trackers)
+        bucket_name, key = sanitize_s3_uri(interaction_url)
 
-    sanitized_tackers = sanitize_trackers(trackers)
-    if "error" in sanitized_tackers:
-        msg = f"Invalid trackers format: {sanitized_tackers["error"]}"
-        logger.error(msg)
-        return ResponseAWS(400, {"error": sanitized_tackers["error"]}).create_response()
-    trackers = sanitized_tackers["trackers"]
+        check_s3_object_exists(bucket_name=bucket_name, key=key, s3_client=s3)
 
-    sanitized_s3_uri = sanitize_s3_uri(interaction_url)
-    if "error" in sanitized_s3_uri:
-        msg = f"Invalid S3 URI format: {sanitized_s3_uri["error"]}"
-        logger.error(msg)
-        return ResponseAWS(400, {"error": sanitized_s3_uri["error"]}).create_response()
+        extractor = (
+            SimpleRegexInsightExtractor()
+            if not spacy_enabled
+            else SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE)
+        )
 
-    bucket_name, key = sanitized_s3_uri["bucket_name"], sanitized_s3_uri["key"]
-
-    s3_object_exists = check_s3_object_exists(
-        bucket_name=bucket_name, key=key, s3_client=s3
-    )
-    if "error" in s3_object_exists:
-        msg = f"S3 object does NOT exists: {s3_object_exists["error"]}"
-        logger.error(msg)
-        return ResponseAWS(400, {"error": s3_object_exists["error"]}).create_response()
-
-    extractor = (
-        SimpleRegexInsightExtractor()
-        if not spacy_enabled
-        else SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE)
-    )
-    return handle_transcription_job(
-        interaction_url,
-        bucket_name,
-        key,
-        trackers,
-        s3_client=s3,
-        transcribe_client=transcribe,
-        extractor=extractor,
-        # extractor=SimpleRegexInsightExtractor(),
-        # extractor=SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE),
-    )
+        return handle_transcription_job(
+            interaction_url,
+            bucket_name,
+            key,
+            trackers,
+            s3_client=s3,
+            transcribe_client=transcribe,
+            extractor=extractor,
+        )
+    except (ValidationError, S3ClientError, BaseError) as e:
+        logger.error(f"An error occurred: {e}")
+        return ResponseAWS(400, {"error": e.get_error_message()}).create_response()
