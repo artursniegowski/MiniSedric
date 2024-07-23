@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Any, Dict
 
@@ -9,8 +8,8 @@ from extras.extractors import (NATURAL_LANGUAGE_PROCESSING_PIPELINE,
                                SpacyNLPInsightExtractor)
 from extras.handlers import handle_transcription_job
 from extras.response import ResponseAWS
-from extras.validators import (check_s3_object_exists, sanitize_s3_uri,
-                               sanitize_trackers, validate_input)
+from extras.validators import (parse_body, parse_s3_uri, validate_input,
+                               validate_trackers)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -48,13 +47,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
     spacy_enabled = event["headers"].get("X-Spacy", None) == "True"
 
     try:
-        body = json.loads(event["body"])
-    except json.JSONDecodeError as e:
-        msg = f"Invalid JSON format: {str(e)}"
-        logger.error(msg)
-        return ResponseAWS(400, {"error": msg}).create_response()
 
-    try:
+        body = parse_body(event)
+
         required_parameters = ("interaction_url", "trackers")
         validation_result = validate_input(body, required_parameters)
 
@@ -63,10 +58,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
             validation_result["trackers"],
         )
 
-        trackers = sanitize_trackers(trackers)
-        bucket_name, key = sanitize_s3_uri(interaction_url)
-
-        check_s3_object_exists(bucket_name=bucket_name, key=key, s3_client=s3)
+        trackers = validate_trackers(trackers)
+        bucket_name, key = parse_s3_uri(interaction_url)
 
         extractor = (
             SimpleRegexInsightExtractor()
@@ -75,7 +68,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
         )
 
         return handle_transcription_job(
-            interaction_url,
             bucket_name,
             key,
             trackers,

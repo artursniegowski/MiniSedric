@@ -1,11 +1,11 @@
 import json
 import logging
-from typing import Any, Dict
 
 from extras.exception import BaseError, S3ClientError
 from extras.extractors import InsightExtractor
 from extras.response import ResponseAWS
 from extras.types import S3ClientType, TranscribeClientType
+from extras.validators import check_s3_object_exists
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -15,7 +15,7 @@ def handle_transcript_text_from_s3_job(
     bucket_name: str,
     transcript_key: str,
     s3_client: S3ClientType,
-) -> Dict[str, Any]:
+) -> str:
     """
     Retrieve the transcript text from an S3 object.
 
@@ -25,14 +25,13 @@ def handle_transcript_text_from_s3_job(
         s3_client (S3ClientType): client to interact with s3 bucket
 
     Returns:
-        Dict[str, Any]: The transcript text or an error message.
+        str: The transcript text
     """
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key=transcript_key)
         data = response["Body"].read().decode("utf-8")
         transcript_json = json.loads(data)
-        transcript_text = transcript_json["results"]["transcripts"][0]["transcript"]
-        return {"transcript_text": transcript_text}
+        return transcript_json["results"]["transcripts"][0]["transcript"]
     except s3_client.exceptions.NoSuchKey:
         raise S3ClientError(
             {
@@ -54,7 +53,6 @@ def handle_transcript_text_from_s3_job(
 
 
 def handle_transcription_job(
-    interaction_url: str,
     bucket_name: str,
     key: str,
     trackers: list[str],
@@ -63,10 +61,9 @@ def handle_transcription_job(
     extractor: InsightExtractor,
 ) -> ResponseAWS:
     """
-    Handle the transcription job by checking its status and processing the result.
+    Handle the transcription job of the audio file.
 
     Args:
-        interaction_url (str): The URL of the interaction to be transcribed.
         bucket_name (str): The name of the S3 bucket.
         key (str): The key of the S3 object.
         trackers (list): The list of trackers to extract insights.
@@ -75,8 +72,10 @@ def handle_transcription_job(
         extractor (InsightExtractor): The strategy for extracting insights.
 
     Returns:
-        Dict[str, Any]: A dictionary representing the HTTP response.
+        Dict[int, str]: The response with the satatus
     """
+    check_s3_object_exists(bucket_name=bucket_name, key=key, s3_client=s3_client)
+
     job_name = f"transcriptionJob-{bucket_name}-{key.replace('/', '-')}"
     try:
         status = transcribe_client.get_transcription_job(TranscriptionJobName=job_name)
@@ -89,9 +88,8 @@ def handle_transcription_job(
                 bucket_name, transcript_key, s3_client=s3_client
             )
 
-            transcript_text = transcript_result["transcript_text"]
+            insights = extractor.extract_insights(transcript_result, trackers)
 
-            insights = extractor.extract_insights(transcript_text, trackers)
             return ResponseAWS(
                 200, {"status": "COMPLETED", "insights": insights}
             ).create_response()
@@ -109,7 +107,7 @@ def handle_transcription_job(
         logger.info(f"Starting new transcription job: {job_name}")
         transcribe_client.start_transcription_job(
             TranscriptionJobName=job_name,
-            Media={"MediaFileUri": interaction_url},
+            Media={"MediaFileUri": f"s3://{bucket_name}/{key}"},
             MediaFormat="mp3",
             LanguageCode="en-US",
         )

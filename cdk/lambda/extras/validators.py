@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Any, Dict, Tuple
 
@@ -78,9 +79,9 @@ def _is_valid_bucket_name(bucket_name: str) -> bool:
     return True
 
 
-def sanitize_s3_uri(interaction_url: str) -> tuple[str, str]:
+def parse_s3_uri(interaction_url: str) -> tuple[str, str]:
     """
-    Sanitize and validate the S3 URI by extracting the bucket name and key.
+    validate the S3 URI and extract the bucket name and key.
 
     This function performs the following:
     1. Validates that the URI starts with "s3://" and ends with ".mp3".
@@ -124,7 +125,7 @@ def sanitize_s3_uri(interaction_url: str) -> tuple[str, str]:
         )
 
 
-def sanitize_trackers(trackers: Any) -> list[str]:
+def validate_trackers(trackers: Any) -> list[str]:
     """
     Validate the trackers input to ensure it is a list of strings.
 
@@ -173,7 +174,7 @@ def check_s3_object_exists(
     key: str,
     s3_client: S3ClientType,
     with_content_type_check: bool = True,
-) -> Dict[str, Any]:
+) -> bool:
     """
     Check if the S3 object exists and is of the correct type.
 
@@ -184,7 +185,7 @@ def check_s3_object_exists(
                                         to validate the object
         s3_client (S3ClientType): boto client to interact with s3 bucket
     Returns:
-        Dict[str, Any]: A dictionary with status or error message.
+        bool: Indicating the existance status
     """
     try:
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
@@ -198,7 +199,7 @@ def check_s3_object_exists(
     except ClientError as e:
         if e.response["Error"]["Code"] == "404":
             raise S3ClientError(
-                {"error": f"The specified object does not exist: {key}"}
+                {"error": f"The specified object does not exist: {bucket_name} {key}"}
             )
         else:
             raise S3ClientError(
@@ -210,4 +211,11 @@ def check_s3_object_exists(
                 }
             )
 
-    return {"exist": True}
+    return True
+
+
+def parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        return json.loads(event["body"])
+    except json.JSONDecodeError as e:
+        raise ValidationError({"error": f"Invalid JSON format: {str(e)}"})
