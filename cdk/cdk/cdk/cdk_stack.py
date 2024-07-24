@@ -58,6 +58,8 @@ class CdkStack(Stack):
             role=lambda_role,
             environment={"BUCKET_NAME": bucket.bucket_name},
             reserved_concurrent_executions=5,
+            # adjusted based on empirical values
+            memory_size=1024,
         )
 
         # Add this line for lambda provisioned concurrency
