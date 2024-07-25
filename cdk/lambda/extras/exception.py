@@ -29,3 +29,9 @@ class TranscribeClientError(BaseError):
     """Exception raised for transcribe client errors."""
 
     pass
+
+
+class TranscriptionJobError(BaseError):
+    """Transcription Job Failed."""
+
+    pass

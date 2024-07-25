@@ -2,11 +2,13 @@ import logging
 from typing import Any, Dict
 
 import boto3
-from extras.exception import BaseError, S3ClientError, ValidationError
+from extras.exception import (BaseError, S3ClientError, TranscriptionJobError,
+                              ValidationError)
 from extras.extractors import (NATURAL_LANGUAGE_PROCESSING_PIPELINE,
                                SimpleRegexInsightExtractor,
                                SpacyNLPInsightExtractor)
-from extras.handlers import handle_transcription_job
+from extras.handlers import (handle_insights_extraction,
+                             handle_transcription_job)
 from extras.response import ResponseAWS
 from extras.validators import (parse_body, parse_s3_uri, validate_input,
                                validate_trackers)
@@ -61,20 +63,27 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> ResponseAWS:
         trackers = validate_trackers(trackers)
         bucket_name, key = parse_s3_uri(interaction_url)
 
+        transcription_status, transcription_text = handle_transcription_job(
+            bucket_name,
+            key,
+            s3_client=s3,
+            transcribe_client=transcribe,
+        )
+
+        if transcription_status != "COMPLETED":
+            return ResponseAWS(202, {"transcription status": transcription_status}).create_response()
+
         extractor = (
             SimpleRegexInsightExtractor()
             if not spacy_enabled
             else SpacyNLPInsightExtractor(NATURAL_LANGUAGE_PROCESSING_PIPELINE)
         )
-
-        return handle_transcription_job(
-            bucket_name,
-            key,
-            trackers,
-            s3_client=s3,
-            transcribe_client=transcribe,
-            extractor=extractor,
+        insights = handle_insights_extraction(
+            transcription_text, trackers, extractor=extractor
         )
-    except (ValidationError, S3ClientError, BaseError) as e:
+
+        return ResponseAWS(200, {"insights": insights}).create_response()
+
+    except (ValidationError, S3ClientError, BaseError, TranscriptionJobError) as e:
         logger.error(f"An error occurred: {e}")
         return ResponseAWS(400, {"error": e.get_error_message()}).create_response()

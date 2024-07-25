@@ -1,9 +1,9 @@
 import json
 import logging
+from typing import Any, Dict, List, Tuple
 
-from extras.exception import BaseError, S3ClientError
+from extras.exception import BaseError, S3ClientError, TranscriptionJobError
 from extras.extractors import InsightExtractor
-from extras.response import ResponseAWS
 from extras.types import S3ClientType, TranscribeClientType
 from extras.validators import check_s3_object_exists
 
@@ -55,11 +55,9 @@ def handle_transcript_text_from_s3_job(
 def handle_transcription_job(
     bucket_name: str,
     key: str,
-    trackers: list[str],
     s3_client: S3ClientType,
     transcribe_client: TranscribeClientType,
-    extractor: InsightExtractor,
-) -> ResponseAWS:
+) -> Tuple[str, Any]:
     """
     Handle the transcription job of the audio file.
 
@@ -72,7 +70,7 @@ def handle_transcription_job(
         extractor (InsightExtractor): The strategy for extracting insights.
 
     Returns:
-        Dict[int, str]: The response with the satatus
+        Tuple[str, Any]: The response with the satatus
     """
     check_s3_object_exists(bucket_name=bucket_name, key=key, s3_client=s3_client)
 
@@ -88,20 +86,23 @@ def handle_transcription_job(
                 bucket_name, transcript_key, s3_client=s3_client
             )
 
-            insights = extractor.extract_insights(transcript_result, trackers)
-
-            return ResponseAWS(
-                200, {"status": "COMPLETED", "insights": insights}
-            ).create_response()
-
+            return job_status, transcript_result
         elif job_status == "FAILED":
             msg = "Transcription job failed"
             logger.error(msg)
-            return ResponseAWS(400, {"status": job_status}).create_response()
+            raise TranscriptionJobError(
+                {
+                    "error": {
+                        "error_message": "Transcription job failed",
+                        "job_status": job_status,
+                        "job_name": job_name,
+                    }
+                }
+            )
         else:
             msg = "Job still pending"
             logger.info(msg)
-            return ResponseAWS(202, {"status": job_status}).create_response()
+            return job_status, None
 
     except transcribe_client.exceptions.NotFoundException:
         logger.info(f"Starting new transcription job: {job_name}")
@@ -111,10 +112,21 @@ def handle_transcription_job(
             MediaFormat="mp3",
             LanguageCode="en-US",
         )
-        return ResponseAWS(
-            202,
-            {
-                "staus": "STARTED",
-                "job_name": job_name,
-            },
-        ).create_response()
+        return "STARTED", None
+
+
+def handle_insights_extraction(
+    transcript_result: str, trackers: list[str], extractor: InsightExtractor
+) -> List[Dict[str, Any]]:
+    """
+    Extract insights from the transcribed text using the specified extractor.
+
+    Args:
+        transcript_result (str): The transcribed text from the audio file.
+        trackers (list[str]): The list of trackers to extract insights.
+        extractor (InsightExtractor): The strategy for extracting insights.
+
+    Returns:
+        List[Dict[str, Any]]: A list of dictionaries containing the extracted insights.
+    """
+    return extractor.extract_insights(transcript_result, trackers)
